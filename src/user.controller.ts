@@ -125,30 +125,13 @@ export class UserController {
       );
     }
 
-    const { email, password, surname, department_id } = userDto;
+    const { email, password, surname } = userDto;
 
     const user = await this.userService.register(userDto);
-    const userId = user.id;
 
     this.logger.log(`Received user data: ${JSON.stringify(userDto)}`);
 
     // Проверка наличия департамента
-    if (department_id) {
-      this.logger.log(`Checking department with id: ${department_id}`);
-      const department = await this.prismaService.department.findFirst({
-        where: { id: department_id },
-      });
-      if (!department) {
-        this.logger.log(`Department not found. Creating new department`);
-        // Создание нового департамента, если он не существует
-        const newDepartment = await this.departmentService.createDepartment(
-          'New Department',
-          userId,
-        );
-        this.logger.log(`New department created with id: ${newDepartment.id}`);
-        userDto.department_id = newDepartment.id;
-      }
-    }
 
     this.logger.log('Sending registration email');
     await this.mailerService.sendMail({
