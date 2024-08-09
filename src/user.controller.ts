@@ -127,6 +127,9 @@ export class UserController {
 
     const { email, password, surname, department_id } = userDto;
 
+    const user = await this.userService.register(userDto);
+    const userId = user.id;
+
     this.logger.log(`Received user data: ${JSON.stringify(userDto)}`);
 
     // Проверка наличия департамента
@@ -140,7 +143,7 @@ export class UserController {
         // Создание нового департамента, если он не существует
         const newDepartment = await this.departmentService.createDepartment(
           'New Department',
-          decoded.id,
+          userId,
         );
         this.logger.log(`New department created with id: ${newDepartment.id}`);
         userDto.department_id = newDepartment.id;
@@ -161,7 +164,7 @@ export class UserController {
     });
 
     this.logger.log('Registering user');
-    return this.userService.register(userDto);
+    return user;
   }
 
   @ApiOperation({ summary: 'Login a user' })
