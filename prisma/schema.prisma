@@ -1,0 +1,357 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  createdBy Int
+  seenBy    Int[]
+}
+
+model Counterparty {
+  id             Int       @id @default(autoincrement())
+  name           String
+  inn            String
+
+  deals          Deal[]     @relation(name: "CounterpartyDeals")
+  purchases      Purchase[] @relation(name: "CounterpartyPurchases")
+  sales          Sale[]     @relation(name: "CounterpartySales")
+  departures     Departure[] @relation(name: "CounterpartyDepartures")
+
+  @@unique([inn])
+}
+
+model Department {
+  id                Int    @id @default(autoincrement())
+  name              String
+  ropId             Int?   @unique
+  rop               User?  @relation(name: "DepartmentRop", fields: [ropId], references: [id])
+  users           User[]  @relation(name: "UserDepartment")
+  quarterlyTurnoverPlan   Float? // Quarterly turnover plan
+  quarterlyProfitPlan     Float? // Quarterly profit plan
+  yearlyProfitPlan        Float? // Yearly profit plan
+}
+
+model Deal {
+  id             Int           @id @default(autoincrement())
+  counterpartyId Int
+  userId         Int
+  turnoverRub    Float
+  marginRub      Float
+  stage          Stage
+  closeDate      DateTime?     // Nullable field
+  lossReason     LossReason?   // Nullable field
+  comment        String?
+
+  dealType       DealType      // New field to specify the type of deal
+  purchaseId     Int?          // Nullable field to link to the Purchase table
+  saleId         Int?          // Nullable field to link to the Sale table
+
+  counterparty   Counterparty  @relation(name: "CounterpartyDeals", fields: [counterpartyId], references: [id])
+  user           User          @relation(name: "UserDeals", fields: [userId], references: [id])
+  purchase       Purchase[]    @relation(name: "PurchaseDeal")
+  sale           Sale[]        @relation(name: "SaleDeal")
+  departures     Departure[]   @relation(name: "DepartureDeal")
+
+}
+
+enum DealType {
+  PURCHASE
+  SALE
+}
+
+enum Stage {
+  INVOICE_SENT
+  QUOTE_SENT
+  LOST
+  WORKING_WITH_OBJECTIONS
+  DEAL_CLOSED
+  INVOICE_PAID
+}
+
+enum LossReason {
+  EXPENSIVE
+  OTHER
+  DID_NOT_WORK
+  NO_REPORT
+  EMPTY_TALK
+}
+
+model Departure {
+  id                   Int        @id @default(autoincrement())
+  dealId               Int
+  counterpartyId       Int
+  userId               Int
+  destination          Destination?  // Nullable field "destination"
+  transportCompany     String?       // Nullable field "transport company"
+  trackingNumber       String
+  finalAmount          Float?        // Nullable field "final amount"
+  dispatchDate         DateTime
+  expectedArrivalDate  DateTime?     // Nullable field "expected arrival date"
+  arrivalDate          DateTime?     // Nullable field "arrival date"
+  specificDestination  SpecificDestination // Field "specific destination"
+  comments             String?       // Nullable field "comments"
+  status               Status        // Field "status"
+
+  deal                 Deal         @relation(name: "DepartureDeal", fields: [dealId], references: [id])
+  counterparty         Counterparty @relation(name: "CounterpartyDepartures", fields: [counterpartyId], references: [id])
+  user                 User         @relation(name: "DepartureUser", fields: [userId], references: [id])
+
+  @@index([dealId])
+  @@index([counterpartyId])
+  @@index([userId])
+}
+
+enum Destination {
+  TO_CLIENT
+  TO_US
+  RETURN_FROM_CLIENT
+  RETURN_TO_SUPPLIER
+}
+
+enum SpecificDestination {
+  TO_TERMINAL
+  TO_DOOR
+}
+
+enum Status {
+  SENT_ALL
+  SENT_PARTIALLY
+  DELIVERED_ALL
+  DELIVERED_PARTIALLY
+  PROBLEM
+}
+
+model User {
+  id                   Int         @id @default(autoincrement())
+  email                String      @unique
+  name                 String
+  birthday             String
+  surname              String
+  dobNumber            Int?
+  cardNumber           String?
+  isActive             Boolean     @default(true)
+  mobile               String
+  hireDate             String?
+  margin_percent       Float?
+  managed_by           Int?
+  address              String?
+  department_id        Int?
+  middleName           String
+  password             String
+  position             String?
+  roleName             String
+  roleId               Int
+  role                 Role        @relation(name: "UserRole", fields: [roleId], references: [id])
+  managed              User?       @relation(name: "ManagedBy", fields: [managed_by], references: [id])
+  managing             User[]      @relation(name: "ManagedBy")
+  department           Department? @relation(name: "UserDepartment", fields: [department_id], references: [id])
+  ropOfDepartment      Department? @relation(name: "DepartmentRop")
+  quarterlyTurnoverPlan Float?     // Quarterly turnover plan
+  quarterlyProfitPlan   Float?     // Quarterly profit plan
+  yearlyProfitPlan      Float?     // Yearly profit plan
+  deals                Deal[]      @relation(name: "UserDeals")
+  salaries             Salary[]    @relation(name: "SalaryUser")
+  sales                Sale[]      @relation(name: "SaleUser")
+  purchases            Purchase[]  @relation(name: "PurchaseUser")  
+  departures           Departure[] @relation(name: "DepartureUser")
+  expenses             Expense[]   @relation(name: "ExpenseUser")
+}
+
+model FiredUser {
+  id             Int     @id @default(autoincrement())
+  email          String  @unique
+  name           String
+  birthday       String
+  surname        String
+  dobNumber      Int?
+  cardNumber     String?
+  mobile         String
+  fireDate       String // Fire date
+  margin_percent Float?
+  managed_by     Int?
+  address        String?
+  department_id  Int?
+  middleName     String
+  position       String?
+  lastRoleName   String
+  lastRoleId     Int
+}
+
+model Role {
+  id             Int     @id @default(autoincrement())
+  name           String  @unique
+  users          User[]  @relation(name: "UserRole")
+  contragents    Boolean
+  summary_table  Boolean
+  departures     Boolean
+  salary_reports Boolean
+  finances       Boolean
+  common_sales   Boolean
+  sales_list     Boolean
+  suppliers      Boolean
+  procurements   Boolean
+}
+
+model Dialogue {
+  id        Int      @id @default(autoincrement())
+  context   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Salary {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  month      Int
+  year       Int
+  salary     Float
+  earned     Float
+  paid       Float
+  user       User     @relation(name: "SalaryUser", fields: [userId], references: [id])
+
+  @@unique([userId, month, year])
+}
+
+model Expense {
+  id             Int       @id @default(autoincrement())
+  name           String
+  category       String
+  subcategory    String
+  expense        Float
+  date           DateTime
+  userId         Int
+  user           User      @relation(name: "ExpenseUser", fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Sale {
+  id                 Int          @id @default(autoincrement())
+  date               DateTime     @default(now())
+  dealId             Int          @unique
+  invoiceNumber      String?
+  counterpartyId     Int
+  userId             Int
+  logisticsCost      Float?       @default(0)
+  purchaseCost       Float?       @default(0)
+  saleAmount         Float?       @default(0)
+  margin             Float?       @default(0)
+  deliveryStage      DeliveryStage @default(PURCHASED_FOR_ORDER)
+  signingStage       SigningStage  @default(SIGNED_IN_EDO)
+
+  deal               Deal         @relation(name: "SaleDeal", fields: [dealId], references: [id])
+  counterparty       Counterparty @relation(name: "CounterpartySales", fields: [counterpartyId], references: [id])
+  user               User         @relation(name: "SaleUser", fields: [userId], references: [id])
+
+  @@index([dealId])
+  @@index([counterpartyId])
+  @@index([userId])
+}
+
+enum DeliveryStage {
+  PURCHASED_FOR_ORDER
+  IN_STOCK
+  ITEM_SENT
+  ITEM_DELIVERED_FULL
+  ITEM_DELIVERED_PARTIAL
+  RETURN
+}
+
+enum SigningStage {
+  SIGNED_IN_EDO
+  SIGNED_ON_PAPER
+}
+
+model Purchase {
+  id                 Int        @id @default(autoincrement())
+  dealId             Int
+  requestNumber      String
+  counterpartyId     Int
+  invoiceToCustomer  Float
+  userId             Int
+  deliveryDeadline   DateTime
+
+  deal               Deal       @relation(name: "PurchaseDeal", fields: [dealId], references: [id])
+  counterparty       Counterparty @relation(name: "CounterpartyPurchases", fields: [counterpartyId], references: [id])
+  user               User       @relation(name: "PurchaseUser", fields: [userId], references: [id])
+
+  invoiceLines       InvoiceLine[] @relation(name: "PurchaseInvoiceLines")
+  supplierLines      SupplierLine[] @relation(name: "PurchaseSupplierLines")
+  logisticsLines     LogisticsLine[] @relation(name: "PurchaseLogisticsLines")
+
+  @@index([dealId])
+  @@index([counterpartyId])
+  @@index([userId])
+}
+
+model InvoiceLine {
+  id                Int      @id @default(autoincrement())
+  purchaseId        Int
+  articleNumber     String   @unique
+  description       String
+  quantity          Int
+  unitPrice         Float
+  totalPrice        Float
+  comment           String?
+
+  purchase          Purchase @relation(name: "PurchaseInvoiceLines", fields: [purchaseId], references: [id])
+
+  @@index([purchaseId])
+}
+
+model SupplierLine {
+  id                   Int      @id @default(autoincrement())
+  purchaseId           Int
+  supplierId           Int
+  articleNumber        String   @unique
+  description          String
+  quantity             Int
+  supplierInvoice      String
+  totalPurchaseAmount  Float
+  paymentDate          DateTime
+  shipmentDate         DateTime
+  delivered            Boolean
+  comment              String?
+
+  purchase             Purchase @relation(name: "PurchaseSupplierLines", fields: [purchaseId], references: [id])
+  supplier             Supplier @relation(name: "SupplierSupplierLines", fields: [supplierId], references: [id])
+
+  @@index([purchaseId])
+  @@index([supplierId])
+}
+
+model LogisticsLine {
+  id                  Int      @id @default(autoincrement())
+  purchaseId          Int
+  date                DateTime
+  description         String
+  carrier             String
+  amount              Float
+
+  purchase            Purchase @relation(name: "PurchaseLogisticsLines", fields: [purchaseId], references: [id])
+
+  @@index([purchaseId])
+}
+
+model Supplier {
+  id            Int      @id @default(autoincrement())
+  name          String
+  address       String
+  phone         String
+  email         String
+  website       String
+  contactPerson String
+  note          String?
+
+  supplierLines SupplierLine[] @relation(name: "SupplierSupplierLines")
+}
